@@ -1,0 +1,38 @@
+---
+title: tbd
+date: 2024-11-29
+author:
+  name: "Adnan Rafif Wijayarso"
+  orcid: 0009-0005-0216-5559
+  email: "adnanwijayarso@gmail.com"
+format: 
+  html:
+    toc: true
+    code-fold: true
+execute: 
+  warning: false
+editor: source
+---
+
+## Introduction
+This visualization is made to participate in openwashdata hackathon.
+
+## Methods
+The data sets I used in this project are as follows:
+1. 
+
+```{r}
+install.packages("devtools")
+devtools::install_github("openwashdata/washinvestments")
+
+
+```
+
+
+## Results
+
+
+## Conclusions
+
+
+## References
