@@ -1,5 +1,5 @@
 ---
-title: tbd
+title: Just throw money at it! — Is the amount of money invested in water-related projects the key to increase the water service level?
 date: 2024-11-29
 author:
   name: "Adnan Rafif Wijayarso"
@@ -15,24 +15,106 @@ editor: source
 ---
 
 ## Introduction
-This visualization is made to participate in openwashdata hackathon.
+Studies show that economic health of a country, usually represented in GPD per capita, strongly correlates with drinking the country's water service level. Governments and development banks threw large sum of money to increase the water service level at global scale, to meet the SDG goal to ensure availability of drinking water by 2030 — which lays the question: is the amount of money invested in water-related projects resulting directly in the increase of basic water service level? This visualization is made to participate in openwashdata hackathon on November 29, 2024.
 
 ## Methods
 The data sets I used in this project are as follows:
-1. 
+1. washinvestments from openwashdata
+2. WaterService_vs_GDP_long from my previous project in openwashdata course, derived from JMP Global Database for Water Supply, Sanitation, and Hygiene
+3. Intermediate Region Code name according to the UNSD-Methodology (UN M49 Standard) in which the project is implemented (UN Statistics Division 2022)
 
 ```{r}
+# Installing and loading the packages
 install.packages("devtools")
+install.packages("tidyverse")
+install.packages("janitor")
+install.packages("here")
+install.packages("readxl")
+
+# Loading the packages
+library(washinvestments)
+library(tidyverse)
+library(janitor)
+library(here)
+library(readxl)
+
+# Importing data packages
 devtools::install_github("openwashdata/washinvestments")
+servicelevel <- read_csv(here::here("data/raw/WaterService_vs_GDP_long.csv"))
+UNregion <- read_excel(here::here("data/raw/UNSD — Methodology.xlsx"))
+
 
 
 ```
 
-
 ## Results
+The washinvestments data packages contains investment data on water and sanitation sector from 1963-2020, but the JMP Global Database only has estimation data from 2000-2022 — so we need to subset the washinvestment data to match the data availability that JMP Global Database has.
+```{r}
+# Preparing the service level and UN regions data sets to be joined later to the washinvestments data
+UNregion_ref <- UNregion[, c(4, 6, 12)]
 
+# Subsetting the washinvestments: only water sector, year 2000-2020, and counting the yearly invested amount for each region
+washinvestments_water_2000_2020 <- washinvestments |> 
+  filter(sector == "Water" | sector == "Water +",
+         region != "World",
+         year >= 2000 & year <= 2020 ) |> 
+  group_by(region, year) |> 
+  summarise(amounttotal = sum(amounttotal_2020usd, na.rm = TRUE)) |> 
+  rename(subregion_name = region) |> 
+  left_join(UNregion_ref, by = "subregion_name") |> 
+  mutate(region_name_filled = case_when(
+    subregion_name == "Caribbean" ~ "Americas",
+    subregion_name == "Central America" ~ "Americas",
+    subregion_name == "Eastern Africa" ~ "Africa",
+    subregion_name == "Middle Africa" ~ "Africa",
+    subregion_name == "South America" ~ "America",
+    subregion_name == "Southern Africa" ~ "Africa",
+    subregion_name == "Western Africa" ~ "Africa",
+    TRUE ~ region_name))
+washinvestments_water_2000_2020_region <- washinvestments_water_2000_2020 |> 
+  group_by(region_name_filled, year) |> 
+  summarise(amounttotal = sum(amounttotal, na.rm = TRUE)) |> 
+  rename(region_name = region_name_filled) |> 
+  mutate(region_year = paste(region_name, year, sep = "_"))
+
+# Filtering the service level data and calculating the yearly increase on basic service level for each country
+servicelevel_year <- servicelevel_region |> 
+  filter(residence == "national",
+         levels_service == "basic") |> 
+  group_by(region_name, year) |> 
+  summarise(population_1000 = sum(country_population_1000, na.rm = TRUE),
+            population_basicservice_1000 = sum(served_population_1000, na.rm = TRUE)) |> 
+  mutate(basicservice_lag = lag(population_basicservice_1000)) |> 
+  mutate(basicservice_pop1000_increase = case_when(
+    year == 2000 ~ 0,
+    TRUE ~ population_basicservice_1000 - basicservice_lag)) |> 
+  mutate(basicservice_percentage_increase = basicservice_pop1000_increase / population_1000 * 100) |> 
+  mutate(region_year = paste(region_name, year, sep = "_"))
+
+# Joining the two data frames
+servicelevel_waterinvestment <- servicelevel_year |> 
+  left_join(washinvestments_water_2000_2020_region, by = "region_year") |> 
+  mutate(amount_percap = amounttotal / (population_1000 * 1000))
+
+```
+
+```{r}
+ggplot(data = servicelevel_waterinvestment,
+       aes(x = year.x)) +
+  geom_col(aes(y = amount_percap),
+           color = "gray80") +
+  geom_line(aes(y = basicservice_percentage_increase),
+            color = "blue") +
+  scale_x_continuous(name = "Year") +
+  scale_y_continuous(limits = c(0, 10),
+                     name = "Increase in service level (%)",
+                     sec.axis = sec_axis(~ ./1, name = "Amount invested per capita (in 2020 USD)")) +
+  facet_wrap(~region_name.x) +
+  ggtitle("Amount invested in water projects per capita vs increase in basic water service level") +
+  theme_minimal()
+
+```
 
 ## Conclusions
+The amount of money invested by governments and development banks does not directly result in the increase of water service level. It shows that the water service level in all regions increases by 2% in average, with the exclusion of Oceania whose water service level increases at 1% yearly. There is a downward trend in the amount invested in water projects in Africa and Asia after the year of 2010, but it yields different results, as the water service level in Africa raises faster each year but the growth of water service level slows down in Asia each year.  
 
-
-## References
